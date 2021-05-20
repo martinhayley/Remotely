@@ -37,7 +37,8 @@
                 <label class="custom-control-label" for="hideOfflineDevicesCheckbox">Hide offline devices</label>
             </div>
             <div class="mt-2">
-                <button class="btn btn-sm btn-secondary" @onclick="SelectAllCards">Select All</button>
+                <button class="btn btn-sm btn-secondary mr-2" @onclick="SelectAllCards">Select All</button>
+                <button class="btn btn-sm btn-primary" @onclick="HandleRefreshClicked">Refresh</button>
             </div>
         </div>
          
@@ -48,8 +49,7 @@
                     <input class="form-control d-inline"
                            style="width: 200px"
                            placeholder="Search device properties"
-                           @bind="_filter"
-                           @bind:event="oninput" />
+                           @bind="_filter" />
                 </div>
 
                 <div class="mt-2" style="white-space: nowrap">
@@ -67,10 +67,10 @@
 
                 <div class="mt-2">
                     <select class="form-control d-inline" style="width:100px" @bind="_devicesPerPage">
+                        <option value="25">25</option>
                         <option value="50">50</option>
                         <option value="100">100</option>
                         <option value="200">200</option>
-                        <option value="500">500</option>
                     </select>
                     <span class="ml-1 small">per page</span>
                 </div>
@@ -80,7 +80,7 @@
         </div>
     </div>
     <div id="deviceListDiv" class="p-2 mb-5">
-        @foreach (var device in DevicesForPage)
+        @foreach (var device in _devicesForPage)
         {
             <CascadingValue Value="this">
                 <DeviceCard @key="device.ID" Device="device" RemoteControlTargetLookup="_remoteControlTargetLookup" />

@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Remotely.Shared.Enums;
 using Remotely.Shared.Models;
+using Remotely.Shared.Utilities;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -47,7 +48,8 @@ namespace Remotely.Agent.Services
 
         public static ExternalScriptingShell GetCurrent(ScriptingShell shell, string senderConnectionId)
         {
-            if (_sessions.TryGetValue($"{shell}-{senderConnectionId}", out var session))
+            if (_sessions.TryGetValue($"{shell}-{senderConnectionId}", out var session) &&
+                session.ShellProcess?.HasExited != true)
             {
                 session.ProcessIdleTimeout.Stop();
                 session.ProcessIdleTimeout.Start();
@@ -78,33 +80,46 @@ namespace Remotely.Agent.Services
 
         public ScriptResult WriteInput(string input, TimeSpan timeout)
         {
-            StandardOut = "";
-            ErrorOut = "";
-            Stopwatch = Stopwatch.StartNew();
-            lock (ShellProcess)
+            try
             {
-                LastInputID = Guid.NewGuid().ToString();
-                OutputDone.Reset();
-                ShellProcess.StandardInput.Write(input + _lineEnding);
-                ShellProcess.StandardInput.Write("echo " + LastInputID + _lineEnding);
-
-                var result = Task.WhenAny(
-                    Task.Run(() =>
-                    {
-                        return ShellProcess.WaitForExit((int)timeout.TotalMilliseconds);
-                    }),
-                    Task.Run(() =>
-                    {
-                        return OutputDone.WaitOne();
-
-                    })).ConfigureAwait(false).GetAwaiter().GetResult();
-
-                if (!result.Result)
+                StandardOut = "";
+                ErrorOut = "";
+                Stopwatch = Stopwatch.StartNew();
+                lock (ShellProcess)
                 {
-                    return GeneratePartialResult(input);
+                    LastInputID = Guid.NewGuid().ToString();
+                    OutputDone.Reset();
+                    ShellProcess.StandardInput.Write(input + _lineEnding);
+                    ShellProcess.StandardInput.Write("echo " + LastInputID + _lineEnding);
+
+                    var result = Task.WhenAny(
+                        Task.Run(() =>
+                        {
+                            return ShellProcess.WaitForExit((int)timeout.TotalMilliseconds);
+                        }),
+                        Task.Run(() =>
+                        {
+                            return OutputDone.WaitOne();
+
+                        })).ConfigureAwait(false).GetAwaiter().GetResult();
+
+                    if (!result.Result)
+                    {
+                        return GeneratePartialResult(input);
+                    }
                 }
+                return GenerateCompletedResult(input);
             }
-            return GenerateCompletedResult(input);
+            catch (Exception ex)
+            {
+                Logger.Write(ex);
+                ErrorOut += Environment.NewLine + ex.Message;
+
+                // Something's wrong.  Let the next command start a new session.
+                RemoveSession();
+            }
+
+            return GeneratePartialResult(input);
         }
 
         private ScriptResult GenerateCompletedResult(string input)
@@ -193,6 +208,11 @@ namespace Remotely.Agent.Services
             }
         }
         private void ProcessIdleTimeout_Elapsed(object sender, System.Timers.ElapsedEventArgs e)
+        {
+            RemoveSession();
+        }
+
+        private void RemoveSession()
         {
             ShellProcess?.Kill();
             _sessions.TryRemove(SenderConnectionId, out _);
