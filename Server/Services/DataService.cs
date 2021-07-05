@@ -642,14 +642,10 @@ namespace Remotely.Server.Services
                 if (currentUser.IsServerAdmin)
                 {
                     dbContext.EventLogs.RemoveRange(dbContext.EventLogs);
-                    dbContext.ScriptResults.RemoveRange(dbContext.ScriptResults);
                 }
                 else
                 {
                     var eventLogs = dbContext.EventLogs.Where(x => x.OrganizationID == currentUser.OrganizationID);
-                    var commandResults = dbContext.ScriptResults.Where(x => x.OrganizationID == currentUser.OrganizationID);
-
-                    dbContext.ScriptResults.RemoveRange(commandResults);
                     dbContext.EventLogs.RemoveRange(eventLogs);
                 }
 
@@ -963,7 +959,6 @@ namespace Remotely.Server.Services
                     (
                         remotelyUser.IsAdministrator ||
                         string.IsNullOrWhiteSpace(device.DeviceGroupID) ||
-                        !device.DeviceGroup.Users.Any() ||
                         device.DeviceGroup.Users.Any(user => user.Id == remotelyUser.Id
                     )));
         }
@@ -2121,8 +2116,7 @@ namespace Remotely.Server.Services
                     user.OrganizationID == device.OrganizationID &&
                     userIDs.Contains(user.Id));
 
-            if (string.IsNullOrWhiteSpace(device.DeviceGroupID) ||
-                !device.DeviceGroup.Users.Any())
+            if (string.IsNullOrWhiteSpace(device.DeviceGroupID))
             {
                 return orgUsers
                     .Select(x => x.Id)
